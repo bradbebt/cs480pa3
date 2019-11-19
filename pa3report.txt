@@ -1,0 +1,6 @@
+CS480 PA3
+Ben Bradberry and Elena Trafton
+
+*Report/plot the sum of squared errors(inertia), running k-means 10 times with k=15.
+*Explain why the results vary when running K-means for multiple trials with k=15^.
+	The K-means algorithm starts with randomly placed centroids. In our case, of course, they are pseudorandom, but still, their original point will change from trial to trial. Hypothetically, if this algorithm is allowed to run forever/until there is no more movement, the origin of these centroids doesn't matter and they'll always converge to the same places. (In reality, this may not be the case; for example, if two centroids are placed to start and there are three distinct clusters, the centroids may end up in a different place depending on where they start.) However, even hypothetically, putting a restriction on the number of iterations the loop is permitted to run through means that the algorithm may not be able to run until the centroids stabilize, and so they are likely to be in wildly different places depending on where they start.
