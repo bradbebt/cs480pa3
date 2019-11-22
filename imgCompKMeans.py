@@ -11,7 +11,6 @@ import sklearn.cluster as cluster
 from sklearn.cluster import KMeans as kmeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
-
 import argparse
 
 
@@ -58,22 +57,12 @@ def main():
     print("centroids:", centroids)
 
     labels = labels.reshape(img_size[0], img_size[1])
-    print("labels shape:", labels.shape)
 
     # creating the compressed image
     X_compressed  = np.empty((img_size[0], img_size[1], 3))
-    print("X_compressed shape:", X_compressed.shape)
     for i in range(0, labels.shape[0]):
         for j in range(0, labels.shape[1]):
             X_compressed[i][j] = centroids[labels[i][j]]
-
-    # Document Instructions:
-    #
-    # For one of the images that has been supplied, run kmeans 10 times with k = 15 and
-    # report/plot the sum of the squared errors (inertia_).
-
-    # Briefly explain why the results vary (1-2 sentences).
-
 
 
     fig, ax = plt.subplots(1, 1, figsize = (8, 8))
@@ -86,18 +75,17 @@ def main():
     plt.savefig(parms.outputFileName,dpi=400,bbox_inches='tight',pad_inches=0.05)
 
     plt.show()
-
-    '''
-    LEFT TODO:
-    -silhouette coefficient
-    -plots and writeup
-    -choose last photo
-    -wine dataset
     
-    '''
-    
+    #silhouette calulations
+    #	First, get a list of clusters.
+    #	Then, for each pixel, identify that pixel's centroid and cluster,
+    #		and use those and the intra_cluster_distance() and nearest_cluster_distance() 
+    #		functions to get that pixel's silhouette coefficient, and add it to an array
+    #		that keeps each pixel's silhouette coefficient.
+    #	Finally, simply take the average of that array. this is the average silhouette
+    #		coefficient for this compressed image.
     X = X.reshape(img_size[0], img_size[1], img_size[2])
-    clusters = chunk(X, X_compressed, centroids)
+    clusters = get_clusters(X, X_compressed, centroids)
     silhouettes = []
     for i in range(0, X.shape[0]):
     	for j in range(0, X.shape[1]):
@@ -105,7 +93,7 @@ def main():
     		centroid = X_compressed[i][j]
     		cluster_index = get_cluster_index(centroid, centroids)
     		pixel_cluster = clusters[cluster_index]
-    		a = intra_cluster_distance(X, X_compressed, centroid, pixel_cluster, i, j)
+    		a = intra_cluster_distance(X, pixel_cluster, i, j)
     		b = nearest_cluster_distance(X, X_compressed, centroids, clusters, i, j)
     		if a < b:
     			silhouette = 1 - (a/b)
@@ -114,25 +102,14 @@ def main():
     		elif a > b:
     			silhouette = (b/a)-1
     		silhouettes.append(silhouette)
-    
-    			
+		
     print("~~~sil", np.average(silhouettes))
-    #print("correct sil", silhouette_score(X, labels)) 
-    '''VERIFICATION of silhouette score doesn't work right now, I'm debugging'''
     
-    
-    #(b-a)/max(a,b) for a sample
-    #mean silhouette coefficient over all samples
-    
-    #optimization: calculate each cluster and then feed into intra_cluster_distance with different params instead of calculating centroid and cluster each time
-    
-def get_cluster_index(centroid, centroids):
-		for k in range(0, centroids.shape[0]):
-			if np.array_equal(centroid, centroids[k]):
-				return k
-		return np.Inf
-    
-def chunk(X, X_compressed, centroids):
+'''
+returns one array where each element is all of the points of a particular cluster.
+clusters[i] has centroids[i].
+'''
+def get_clusters(X, X_compressed, centroids):
 	clusters = [None]*len(centroids) #initialize to size equivalent len(centroids)
 	clusters = np.asarray(clusters)
 	for i in range(0, X_compressed.shape[0]):
@@ -148,25 +125,33 @@ def chunk(X, X_compressed, centroids):
 				pixel_cluster = np.concatenate((pixel_cluster, [point]))
 			clusters[clusterIndex] = pixel_cluster
 	return clusters
-		
-def intra_cluster_distance(X, X_compressed, centroid, pixel_cluster, x, y):
+	
+'''
+the average distance from (x, y) to every point in pixel_cluster.
+'''	
+def intra_cluster_distance(X, pixel_cluster, x, y):
     distances = []
     this_point = X[x][y]
 
     for point in pixel_cluster:
         #if i == x and j == y:
         #    break #don't include self
-        #print("iterating point:", point)
-        #print("point passed:", this_point)
         distances.append(np.sqrt(np.square(point[0]-this_point[0]) +
-                         np.square(point[1]-this_point[1]) +
-                         np.square(point[2]-this_point[2])))
+                                 np.square(point[1]-this_point[1]) +
+                                 np.square(point[2]-this_point[2])))
     return np.average(distances)
 
 '''
-I'm not sure how to decide which is the closest cluster; by computing the average point across each cluster and comparing to that, or comparing to the centroid, or to the nearest non-cluster single point/sample to thispoint. I'm just going to compare to centroids.
+It may be more correct to compute the average distance of (x, y) to every point in each 
+cluster and determine from that which is the nearest cluster. However, that seems 
+inefficient when I could just compare to the centroid of each cluster, so that's what I'm 
+doing.
+
+This function returns the average distance from (x, y) to each point in the nearest
+cluster to which (x, y) does NOT belong.
 '''
 def nearest_cluster_distance(X, X_compressed, centroids, clusters, x, y):
+	
     this_point = X[x][y]
     this_centroid = X_compressed[x][y]
     
@@ -179,7 +164,8 @@ def nearest_cluster_distance(X, X_compressed, centroids, clusters, x, y):
             if ((not np.array_equal(this_centroid, temp)) and distance < min_distance):
                 min_distance = distance
                 nearest_centroid = temp
-
+	
+	#using knowledge of nearest centroid, get all points in that cluster
     nearest_cluster_index = get_cluster_index(nearest_centroid, centroids)
     nearest_cluster = clusters[nearest_cluster_index]
     
@@ -191,6 +177,16 @@ def nearest_cluster_distance(X, X_compressed, centroids, clusters, x, y):
                                  np.square(point[2]-this_point[2])))
 
     return np.average(distances)
+    
+'''
+This is a simple helper method that gets the correct cluster index
+given an array of centroids and the desired cluster's centroid.
+'''
+def get_cluster_index(centroid, centroids):
+		for k in range(0, centroids.shape[0]):
+			if np.array_equal(centroid, centroids[k]):
+				return k
+		return np.Inf
 
 
 if __name__ == '__main__':
