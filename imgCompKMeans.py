@@ -1,5 +1,6 @@
 #    name: imgCompKMeans.py
 #  author: molloykp (Nov 2019)
+#          Elena Trafton and Ben Bradberry
 # purpose: K-Means compression on an image
 
 import numpy as np
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import sklearn.cluster as cluster
 from sklearn.cluster import KMeans as kmeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
 
 import argparse
 
@@ -43,7 +45,6 @@ def main():
     img_x = img_size[1]
 
     X = img.reshape(img_size[0] * img_size[1], img_size[2])
-    print("X shape:", X.shape)
     # Insert your code here to perform
     # Init must be random and n_init must be 1
     #kmeans.n_iter_ = kTimes # setting kmeans to iterate k times
@@ -58,7 +59,6 @@ def main():
 
     labels = labels.reshape(img_size[0], img_size[1])
     print("labels shape:", labels.shape)
-    print("centroids shape:", centroids.shape)
 
     # creating the compressed image
     X_compressed  = np.empty((img_size[0], img_size[1], 3))
@@ -98,10 +98,8 @@ def main():
     
     X = X.reshape(img_size[0], img_size[1], img_size[2])
     clusters = chunk(X, X_compressed, centroids)
-    silhouttes = []
+    silhouettes = []
     for i in range(0, X.shape[0]):
-    	if i % 100 == 0:
-    		print("i=",i)
     	for j in range(0, X.shape[1]):
     		silhouette = np.Inf
     		centroid = X_compressed[i][j]
@@ -115,10 +113,13 @@ def main():
     			silhouette = 0
     		elif a > b:
     			silhouette = (b/a)-1
-    		silhouttes.append(silhouette)
+    		silhouettes.append(silhouette)
     
     			
     print("~~~sil", np.average(silhouettes))
+    #print("correct sil", silhouette_score(X, labels)) 
+    '''VERIFICATION of silhouette score doesn't work right now, I'm debugging'''
+    
     
     #(b-a)/max(a,b) for a sample
     #mean silhouette coefficient over all samples
@@ -133,23 +134,19 @@ def get_cluster_index(centroid, centroids):
     
 def chunk(X, X_compressed, centroids):
 	clusters = [None]*len(centroids) #initialize to size equivalent len(centroids)
+	clusters = np.asarray(clusters)
 	for i in range(0, X_compressed.shape[0]):
 		for j in range(0, X_compressed.shape[1]):
 			point = X[i][j]
 			centroid = X_compressed[i][j]
 			
 			clusterIndex = get_cluster_index(centroid, centroids)
-			
 			pixel_cluster = clusters[clusterIndex]
 			if np.array_equal(pixel_cluster, None):
-				pixel_cluster = point
+				pixel_cluster = [point]
 			else:
-				np.append(pixel_cluster, point)
+				pixel_cluster = np.concatenate((pixel_cluster, [point]))
 			clusters[clusterIndex] = pixel_cluster
-	clusters = np.asarray(clusters)
-	print("X COMPRESSED SHAPE:", X_compressed.shape[0])
-	print("SHAPE OF CLUSTERS:", clusters.shape)
-	print("CLUSTERS:", clusters)
 	return clusters
 		
 def intra_cluster_distance(X, X_compressed, centroid, pixel_cluster, x, y):
@@ -159,10 +156,11 @@ def intra_cluster_distance(X, X_compressed, centroid, pixel_cluster, x, y):
     for point in pixel_cluster:
         #if i == x and j == y:
         #    break #don't include self
-        if np.array_equal(X_compressed[i][j], centroid):
-            distances.append(np.sqrt(np.square(point[0]-this_point[0]) +
-                             np.square(point[1]-this_point[1]) +
-                             np.square(point[2]-this_point[2])))
+        #print("iterating point:", point)
+        #print("point passed:", this_point)
+        distances.append(np.sqrt(np.square(point[0]-this_point[0]) +
+                         np.square(point[1]-this_point[1]) +
+                         np.square(point[2]-this_point[2])))
     return np.average(distances)
 
 '''
@@ -182,7 +180,7 @@ def nearest_cluster_distance(X, X_compressed, centroids, clusters, x, y):
                 min_distance = distance
                 nearest_centroid = temp
 
-    nearest_cluster_index = centroids.index(nearest_centroid)
+    nearest_cluster_index = get_cluster_index(nearest_centroid, centroids)
     nearest_cluster = clusters[nearest_cluster_index]
     
     #get average from this_point to all points in nearest cluster
